@@ -2,6 +2,11 @@ name: Promote current screenshots to baseline
 
 on:
   workflow_dispatch:
+    inputs:
+      screenshots:
+        description: "Optional: comma-separated screenshot base names (example: login_page,header_icon). Leave empty to promote ALL."
+        required: false
+        type: string
 
 jobs:
   promote-baseline:
@@ -11,16 +16,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Promote current to baseline
+      - name: Promote current screenshots to baseline
         run: |
-          echo "Promoting current screenshots to baseline..."
+          set -e
 
-          find . -name "*_current.png" | while read current; do
-            baseline="${current/_current.png/_baseline.png}"
+          INPUT="${{ inputs.screenshots }}"
 
-            echo "Updating baseline: $baseline"
-            cp "$current" "$baseline"
-          done
+          if [ -z "$INPUT" ]; then
+            echo "🚀 No input provided. Promoting ALL current screenshots."
+
+            find . -name "*_current.png" | while read current; do
+              baseline="${current/_current.png/_baseline.png}"
+              echo "✅ Promoting $current → $baseline"
+              cp "$current" "$baseline"
+            done
+
+          else
+            echo "🎯 Promoting selected screenshots: $INPUT"
+
+            IFS=',' read -ra SHOTS <<< "$INPUT"
+
+            for shot in "${SHOTS[@]}"; do
+              shot=$(echo "$shot" | xargs)
+
+              current=$(find . -name "${shot}_current.png")
+
+              if [ -z "$current" ]; then
+                echo "❌ Current screenshot not found for: $shot"
+                exit 1
+              fi
+
+              baseline="${current/_current.png/_baseline.png}"
+              echo "✅ Promoting $current → $baseline"
+              cp "$current" "$baseline"
+            done
+          fi
 
       - name: Commit baseline updates
         run: |
